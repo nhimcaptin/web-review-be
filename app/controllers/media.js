@@ -201,6 +201,7 @@ class MediaController {
     try {
       const { type } = req.query;
       const [reviews] = await connection.promise().query("SELECT id, images, videos FROM reviews");
+      console.log('reviews', reviews)
       let files = [];
       if (!type || type === "images") {
         const imagesPath = path.join(__dirname, "../../uploads/images");
@@ -238,11 +239,15 @@ class MediaController {
           videoFiles.map(async (filename) => {
             const filePath = path.join(videosPath, filename);
             const stat = await fs.stat(filePath);
-            const review = reviews.find((r) => r.videos?.includes(filename));
+            const review = reviews.find((r) => {
+              return r.videos.find((v) => v.filename === filename)
+            });
+            const video = review?.videos ? review.videos.find((v) => v.filename === filename) : null;
             return {
               filename,
               stat,
               filePath,
+              frame: video?.frame || "",
               reviewId: review ? review.id : null,
             };
           })
@@ -252,9 +257,10 @@ class MediaController {
         const limitedVideos = videoFilesWithStat.slice(0, 6);
 
         files.push(
-          ...limitedVideos.map(({ filename, filePath, reviewId }) => ({
+          ...limitedVideos.filter((video) => video?.reviewId).map(({ filename, frame, reviewId }) => ({
             filename,
             reviewId,
+            frame
           }))
         );
       }
