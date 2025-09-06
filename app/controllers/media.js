@@ -1,6 +1,7 @@
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs").promises;
+const ffmpeg = require("fluent-ffmpeg");
 const connection = require("../common/connect");
 
 const storage = multer.diskStorage({
@@ -104,24 +105,49 @@ class MediaController {
           });
         }
 
-        const uploadedFiles = req.files.map((file) => {
-          const fileType = file.mimetype.startsWith("image/") ? "images" : "videos";
-          const fileUrl = `/uploads/${fileType}/${file.filename}`;
+        const extractFrame = true;
+        const timestamp = req.body.timestamp || "00:00:01";
 
-          return {
-            filename: file.filename,
-            originalname: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size,
-            url: fileUrl,
-            path: file.path,
-          };
-        });
+        const uploadedFiles = await Promise.all(
+          req.files.map(async (file) => {
+            const fileType = file.mimetype.startsWith("image/") ? "images" : "videos";
+            const fileUrl = `/uploads/${fileType}/${file.filename}`;
+
+            const fileData = {
+              filename: file.filename,
+              originalname: file.originalname,
+              mimetype: file.mimetype,
+              size: file.size,
+              url: fileUrl,
+              path: file.path,
+            };
+
+            if (fileType === "videos" && extractFrame) {
+              try {
+                const frameData = await MediaController.extractFrameFromVideo(file.filename, timestamp);
+                if (frameData) {
+                  fileData.extractedFrame = frameData;
+                }
+              } catch (frameError) {
+                console.error(`Error extracting frame from ${file.filename}:`, frameError);
+                fileData.frameExtractionError = frameError.message;
+              }
+            }
+
+            return fileData;
+          })
+        );
+        const videoFiles = uploadedFiles.filter(file => file.mimetype.startsWith("video/"));
+        const extractedFrames = uploadedFiles.filter(file => file.extractedFrame).length;
+        let message = `Upload ${uploadedFiles.length} files thành công`;
+        if (extractFrame && videoFiles.length > 0) {
+          message += ` (${extractedFrames}/${videoFiles.length} video frames extracted)`;
+        }
 
         return res.status(200).json({
           success: true,
           data: uploadedFiles,
-          message: `Upload ${uploadedFiles.length} files thành công`,
+          message: message,
         });
       });
     } catch (error) {
@@ -247,13 +273,62 @@ class MediaController {
     }
   }
 
+  static async extractFrameFromVideo(videoFilename, timestamp = "00:00:01") {
+    const videoPath = path.join(__dirname, "../../uploads/videos", videoFilename);
+    try {
+      await fs.access(videoPath);
+    } catch (error) {
+      throw new Error("File video không tồn tại");
+    }
+
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const frameFilename = `frame-${uniqueSuffix}.jpg`;
+    const framePath = path.join(__dirname, "../../uploads/images", frameFilename);
+
+    const imagesDir = path.join(__dirname, "../../uploads/images");
+    await fs.mkdir(imagesDir, { recursive: true });
+
+    return new Promise((resolve, reject) => {
+      ffmpeg(videoPath)
+        .seekInput(timestamp)
+        .frames(1)
+        .output(framePath)
+        .on('end', async () => {
+          try {
+            await fs.access(framePath);
+            
+            const frameUrl = `/uploads/images/${frameFilename}`;
+            
+            resolve({
+              frameFilename,
+              frameUrl,
+              framePath,
+              videoFilename,
+              timestamp,
+            });
+          } catch (error) {
+            reject(new Error("Không thể tạo file frame"));
+          }
+        })
+        .on('error', (err) => {
+          console.error("FFmpeg error:", err);
+          if (err.message.includes("Cannot find ffmpeg") || err.message.includes("ffmpeg")) {
+            reject(new Error("FFmpeg chưa được cài đặt. Vui lòng cài đặt FFmpeg để sử dụng chức năng cắt frame."));
+          } else {
+            reject(new Error("Lỗi khi cắt frame từ video: " + err.message));
+          }
+        })
+        .run();
+    });
+  }
+
   async deleteFiles(files, type) {
     if (!files) return;
 
     const _files = typeof files === "string" ? JSON.parse(files) : files;
 
     const tasks = _files.map(async (file) => {
-      const filePath = path.join(__dirname, "../../uploads", type, file);
+      const filePath = path.join(__dirname, "../../uploads", type, file?.filename);
       try {
         await fs.rm(filePath, { force: true });
       } catch (err) {
