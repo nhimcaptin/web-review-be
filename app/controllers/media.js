@@ -199,9 +199,8 @@ class MediaController {
 
   async getFiles(req, res) {
     try {
-      const { type } = req.query;
+      const { type, isFull = false } = req.query;
       const [reviews] = await connection.promise().query("SELECT id, images, videos FROM reviews");
-      console.log('reviews', reviews)
       let files = [];
       if (!type || type === "images") {
         const imagesPath = path.join(__dirname, "../../uploads/images");
@@ -211,7 +210,9 @@ class MediaController {
           imageFiles.map(async (filename) => {
             const filePath = path.join(imagesPath, filename);
             const stat = await fs.stat(filePath);
-            const review = reviews.find((r) => r.images?.includes(filename));
+            const review = reviews.find((r) => {
+              return r.images.find((v) => v.filename === filename)
+            });
             return {
               filename,
               stat,
@@ -221,10 +222,10 @@ class MediaController {
           })
         );
         imageFilesWithStat.sort((a, b) => b.stat.mtime - a.stat.mtime);
-        const limitedImages = imageFilesWithStat.slice(0, 10);
+        const limitedImages = isFull ? imageFilesWithStat : imageFilesWithStat.slice(0, 10);
 
         files.push(
-          ...limitedImages.map(({ filename, filePath, reviewId }) => ({
+          ...limitedImages.filter((image) => image?.reviewId).map(({ filename, filePath, reviewId }) => ({
             filename,
             reviewId,
           }))
@@ -254,7 +255,7 @@ class MediaController {
         );
 
         videoFilesWithStat.sort((a, b) => b.stat.mtime - a.stat.mtime);
-        const limitedVideos = videoFilesWithStat.slice(0, 6);
+        const limitedVideos = isFull ? videoFilesWithStat : videoFilesWithStat.slice(0, 6);
 
         files.push(
           ...limitedVideos.filter((video) => video?.reviewId).map(({ filename, frame, reviewId }) => ({
