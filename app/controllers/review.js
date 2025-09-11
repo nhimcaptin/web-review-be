@@ -23,7 +23,7 @@ class ReviewController {
 
       const [rows] = await connection
         .promise()
-        .query("SELECT * FROM reviews ORDER BY created DESC, orderSort ASC LIMIT ? OFFSET ?", [pageSize, offset]);
+        .query("SELECT * FROM reviews ORDER BY CASE WHEN orderSort IS NOT NULL THEN 0 ELSE 1 END, orderSort ASC, created DESC LIMIT ? OFFSET ?", [pageSize, offset]);
 
       return res.status(200).json({
         success: true,
@@ -379,7 +379,7 @@ class ReviewController {
 
       const totalPages = Math.ceil(total / currentPageSize);
 
-      const searchQuery = `SELECT * FROM reviews ${whereClause} ORDER BY created DESC, orderSort ASC LIMIT ? OFFSET ?`;
+      const searchQuery = `SELECT * FROM reviews ${whereClause} ORDER BY CASE WHEN orderSort IS NOT NULL THEN 0 ELSE 1 END, orderSort ASC, created DESC LIMIT ? OFFSET ?`;
       const searchParams = [...params, currentPageSize, offset];
       const [rows] = await connection.promise().query(searchQuery, searchParams);
 
