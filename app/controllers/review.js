@@ -23,7 +23,7 @@ class ReviewController {
 
       const [rows] = await connection
         .promise()
-        .query("SELECT * FROM reviews ORDER BY created DESC LIMIT ? OFFSET ?", [pageSize, offset]);
+        .query("SELECT * FROM reviews ORDER BY created DESC, orderSort ASC LIMIT ? OFFSET ?", [pageSize, offset]);
 
       return res.status(200).json({
         success: true,
@@ -77,7 +77,7 @@ class ReviewController {
 
   async createReview(req, res) {
     try {
-      const { title, description, rate, verified_purchase, would_recommend, images, videos, user, likes } = req.body;
+      const { title, description, rate, verified_purchase, would_recommend, images, videos, user, likes, orderSort, outstanding } = req.body;
 
       if (!title || !user) {
         return res.status(400).json({
@@ -93,9 +93,16 @@ class ReviewController {
         });
       }
 
+      if (orderSort && (orderSort < 0)) {
+        return res.status(400).json({
+          success: false,
+          message: "OrderSort phải >= 0",
+        });
+      }
+
       const [result] = await connection.promise().query(
-        `INSERT INTO reviews (title, description, rate, verified_purchase, would_recommend, images, videos, user, likes) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO reviews (title, description, rate, verified_purchase, would_recommend, images, videos, user, likes, orderSort, outstanding) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           title,
           description || null,
@@ -106,6 +113,8 @@ class ReviewController {
           videos ? JSON.stringify(videos) : null,
           user,
           Number(likes) || 0,
+          orderSort ? Number(orderSort) : null,
+          outstanding || false,
         ]
       );
 
@@ -128,12 +137,19 @@ class ReviewController {
   async updateReview(req, res) {
     try {
       const { id } = req.params;
-      const { title, description, rate, verified_purchase, would_recommend, images, videos, likes } = req.body;
+      const { title, description, rate, verified_purchase, would_recommend, images, videos, likes, orderSort, outstanding } = req.body;
 
       if (rate && (rate < 1 || rate > 5)) {
         return res.status(400).json({
           success: false,
           message: "Rate phải từ 1 đến 5",
+        });
+      }
+
+      if (orderSort && (orderSort < 0)) {
+        return res.status(400).json({
+          success: false,
+          message: "OrderSort phải >= 0",
         });
       }
 
@@ -155,7 +171,9 @@ class ReviewController {
          verified_purchase = COALESCE(?, verified_purchase),
          would_recommend = COALESCE(?, would_recommend),
          images = COALESCE(?, images),
-         videos = COALESCE(?, videos)
+         videos = COALESCE(?, videos),
+         orderSort = COALESCE(?, orderSort),
+         outstanding = COALESCE(?, outstanding)
          WHERE id = ?`,
         [
           title || null,
@@ -166,6 +184,8 @@ class ReviewController {
           would_recommend !== undefined ? would_recommend : null,
           images ? JSON.stringify(images) : null,
           videos ? JSON.stringify(videos) : null,
+          orderSort ? Number(orderSort) : null,
+          outstanding !== undefined ? outstanding : null,
           id,
         ]
       );
@@ -284,7 +304,7 @@ class ReviewController {
 
       const [rows] = await connection
         .promise()
-        .query("SELECT * FROM reviews WHERE user = ? ORDER BY created DESC LIMIT ? OFFSET ?", [
+        .query("SELECT * FROM reviews WHERE user = ? ORDER BY created DESC, orderSort ASC LIMIT ? OFFSET ?", [
           user,
           currentPageSize,
           offset,
@@ -359,7 +379,7 @@ class ReviewController {
 
       const totalPages = Math.ceil(total / currentPageSize);
 
-      const searchQuery = `SELECT * FROM reviews ${whereClause} ORDER BY created DESC LIMIT ? OFFSET ?`;
+      const searchQuery = `SELECT * FROM reviews ${whereClause} ORDER BY created DESC, orderSort ASC LIMIT ? OFFSET ?`;
       const searchParams = [...params, currentPageSize, offset];
       const [rows] = await connection.promise().query(searchQuery, searchParams);
 

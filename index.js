@@ -23,11 +23,11 @@ app.get("", (req, res) => {
 app.use("/api/reviews", reviewRouter);
 app.use("/api/media", mediaRouter);
 
-// Load SSL cert t? Let’s Encrypt
-const options = {
-  key: fs.readFileSync("/etc/letsencrypt/live/api.autocaruniverse.cloud/privkey.pem"),
-  cert: fs.readFileSync("/etc/letsencrypt/live/api.autocaruniverse.cloud/fullchain.pem")
-};
+// Load SSL cert t? Letï¿½s Encrypt
+// const options = {
+//   key: fs.readFileSync("/etc/letsencrypt/live/api.autocaruniverse.cloud/privkey.pem"),
+//   cert: fs.readFileSync("/etc/letsencrypt/live/api.autocaruniverse.cloud/fullchain.pem")
+// };
 
-https.createServer(options, app).listen(443);
+// https.createServer(options, app).listen(443);
 app.listen(3000);
