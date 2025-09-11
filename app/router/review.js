@@ -6,6 +6,8 @@ router.get("/", reviewController.getAllReviews);
 
 router.get("/search", reviewController.searchReviews);
 
+router.get("/outstanding", reviewController.getOutstandingReviews);
+
 router.get("/user/:user", reviewController.getReviewsByUser);
 
 router.get("/:id", reviewController.getReviewById);

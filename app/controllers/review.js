@@ -412,6 +412,52 @@ class ReviewController {
       });
     }
   }
+
+  async getOutstandingReviews(req, res) {
+    try {
+      const pageIndex = (parseInt(req.query.pageIndex) || 1) - 1;
+      const pageSize = parseInt(req.query.pageSize) || 10;
+      const offset = pageIndex * pageSize;
+
+      if (pageIndex < 0 || pageSize < 1 || pageSize > 1000) {
+        return res.status(400).json({
+          success: false,
+          message: "PageIndex phải >= 0, pageSize phải từ 1-1000",
+        });
+      }
+
+      const [countResult] = await connection.promise().query("SELECT COUNT(*) as total FROM reviews WHERE outstanding = true");
+      const total = countResult[0].total;
+
+      const totalPages = Math.ceil(total / pageSize);
+
+      const [rows] = await connection
+        .promise()
+        .query("SELECT * FROM reviews WHERE outstanding = true ORDER BY CASE WHEN orderSort IS NOT NULL THEN 0 ELSE 1 END, orderSort ASC, created DESC LIMIT ? OFFSET ?", [pageSize, offset]);
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          reviews: rows,
+          pagination: {
+            pageIndex: pageIndex,
+            pageSize: pageSize,
+            totalPages: totalPages,
+            totalItems: total,
+            hasNextPage: pageIndex < totalPages - 1,
+            hasPrevPage: pageIndex > 0,
+          },
+        },
+        message: "Lấy danh sách reviews nổi bật thành công",
+      });
+    } catch (error) {
+      console.error("Error getting outstanding reviews:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi lấy danh sách reviews nổi bật",
+      });
+    }
+  }
 }
 
 module.exports = new ReviewController();
